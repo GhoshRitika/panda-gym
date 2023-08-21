@@ -344,3 +344,207 @@ class RobotTaskEnv(gym.Env):
             pitch=self.render_pitch,
             roll=self.render_roll,
         )
+
+class TaskDouble(ABC):
+    """Base class for task with two goals.
+    Args:
+        sim (PyBullet): Simulation instance.
+    """
+
+    def __init__(self, sim: PyBullet) -> None:
+        self.sim = sim
+        self.goal1 = None
+        self.goal2 = None
+
+    @abstractmethod
+    def reset(self) -> None:
+        """Reset the task: sample a new goal."""
+
+    @abstractmethod
+    def get_obs(self) -> np.ndarray:
+        """Return the observation associated to the task."""
+
+    @abstractmethod
+    def get_achieved_goal(self) -> np.ndarray:
+        """Return the achieved goal."""
+
+    def get_goal1(self) -> np.ndarray:
+        """Return the current goal."""
+        if self.goal1 is None:
+            raise RuntimeError("No goal1 yet, call reset() first")
+        else:
+            return self.goal1.copy()
+
+    def get_goal2(self) -> np.ndarray:
+        """Return the current goal."""
+        if self.goal2 is None:
+            raise RuntimeError("No goal2 yet, call reset() first")
+        else:
+            return self.goal2.copy()
+
+    @abstractmethod
+    def is_success(self, achieved_goal: np.ndarray, desired_goal1: np.ndarray, desired_goal2: np.ndarray, info: Dict[str, Any] = {}) -> np.ndarray:
+        """Returns whether the achieved goal match the desired goal."""
+
+    @abstractmethod
+    def compute_reward(self, achieved_goal: np.ndarray, desired_goal1: np.ndarray, desired_goal2: np.ndarray, info: Dict[str, Any] = {}) -> np.ndarray:
+        """Compute reward associated to the achieved and the desired goal."""
+
+
+class RobotTaskDoubleEnv(gym.Env):
+    """Robotic task goal env, as the junction of a task and a robot.
+
+    Args:
+        robot (PyBulletRobot): The robot.
+        task (Task): The task.
+        render_width (int, optional): Image width. Defaults to 720.
+        render_height (int, optional): Image height. Defaults to 480.
+        render_target_position (np.ndarray, optional): Camera targetting this postion, as (x, y, z).
+            Defaults to [0., 0., 0.].
+        render_distance (float, optional): Distance of the camera. Defaults to 1.4.
+        render_yaw (float, optional): Yaw of the camera. Defaults to 45.
+        render_pitch (float, optional): Pitch of the camera. Defaults to -30.
+        render_roll (int, optional): Rool of the camera. Defaults to 0.
+    """
+
+    metadata = {"render_modes": ["human", "rgb_array"]}
+
+    def __init__(
+        self,
+        robot: PyBulletRobot,
+        task: TaskDouble,
+        render_width: int = 720,
+        render_height: int = 480,
+        render_target_position: Optional[np.ndarray] = None,
+        render_distance: float = 1.4,
+        render_yaw: float = 45,
+        render_pitch: float = -30,
+        render_roll: float = 0,
+    ) -> None:
+        assert robot.sim == task.sim, "The robot and the task must belong to the same simulation."
+        self.sim = robot.sim
+        self.render_mode = self.sim.render_mode
+        self.metadata["render_fps"] = 1 / self.sim.dt
+        self.robot = robot
+        self.task = task
+        observation, _ = self.reset()  # required for init; seed can be changed later
+        observation_shape = observation["observation"].shape
+        achieved_goal_shape = observation["achieved_goal"].shape
+        desired_goal_shape = observation["achieved_goal"].shape
+        self.observation_space = spaces.Dict(
+            dict(
+                observation=spaces.Box(-10.0, 10.0, shape=observation_shape, dtype=np.float32),
+                desired_goal1=spaces.Box(-10.0, 10.0, shape=achieved_goal_shape, dtype=np.float32),
+                desired_goal2=spaces.Box(-10.0, 10.0, shape=achieved_goal_shape, dtype=np.float32),
+                achieved_goal=spaces.Box(-10.0, 10.0, shape=desired_goal_shape, dtype=np.float32),
+            )
+        )
+        self.action_space = self.robot.action_space
+        self.compute_reward = self.task.compute_reward
+        self._saved_goal1 = dict()  # For state saving and restoring
+        self._saved_goal2 = dict()  # For state saving and restoring
+
+        self.render_width = render_width
+        self.render_height = render_height
+        self.render_target_position = (
+            render_target_position if render_target_position is not None else np.array([0.0, 0.0, 0.0])
+        )
+        self.render_distance = render_distance
+        self.render_yaw = render_yaw
+        self.render_pitch = render_pitch
+        self.render_roll = render_roll
+        with self.sim.no_rendering():
+            self.sim.place_visualizer(
+                target_position=self.render_target_position,
+                distance=self.render_distance,
+                yaw=self.render_yaw,
+                pitch=self.render_pitch,
+            )
+
+    def _get_obs(self) -> Dict[str, np.ndarray]:
+        robot_obs = self.robot.get_obs().astype(np.float32)  # robot state
+        # no need to change since reach task does not have a task specific observation
+        task_obs = self.task.get_obs().astype(np.float32)  # object position, velococity, etc...
+        observation = np.concatenate([robot_obs, task_obs])
+        achieved_goal = self.task.get_achieved_goal().astype(np.float32)
+        return {
+            "observation": observation,
+            "achieved_goal": achieved_goal,
+            "desired_goal1": self.task.get_goal1().astype(np.float32),
+            "desired_goal2": self.task.get_goal2().astype(np.float32),
+        }
+
+    def reset(
+        self, seed: Optional[int] = None, options: Optional[dict] = None
+    ) -> Tuple[Dict[str, np.ndarray], Dict[str, Any]]:
+        super().reset(seed=seed, options=options)
+        self.task.np_random, seed = seeding.np_random(seed)
+        with self.sim.no_rendering():
+            self.robot.reset()
+            self.task.reset()
+        observation = self._get_obs()
+        info = {"is_success": self.task.is_success(observation["achieved_goal"], self.task.get_goal1(), self.task.get_goal2())}
+        return observation, info
+
+    def save_state(self) -> int:
+        """Save the current state of the envrionment. Restore with `restore_state`.
+
+        Returns:
+            int: State unique identifier.
+        """
+        state_id = self.sim.save_state()
+        self._saved_goal1[state_id] = self.task.goal1
+        self._saved_goal2[state_id] = self.task.goal2
+        return state_id
+
+    def restore_state(self, state_id: int) -> None:
+        """Resotre the state associated with the unique identifier.
+
+        Args:
+            state_id (int): State unique identifier.
+        """
+        self.sim.restore_state(state_id)
+        self.task.goal1 = self._saved_goal1[state_id]
+        self.task.goal2 = self._saved_goal2[state_id]
+
+    def remove_state(self, state_id: int) -> None:
+        """Remove a saved state.
+
+        Args:
+            state_id (int): State unique identifier.
+        """
+        self._saved_goal1.pop(state_id)
+        self._saved_goal2.pop(state_id)
+        self.sim.remove_state(state_id)
+
+    def step(self, action: np.ndarray) -> Tuple[Dict[str, np.ndarray], float, bool, bool, Dict[str, Any]]:
+        self.robot.set_action(action)
+        self.sim.step()
+        observation = self._get_obs()
+        # An episode is terminated iff the agent has reached the target
+        terminated = bool(self.task.is_success(observation["achieved_goal"], self.task.get_goal1(), self.task.get_goal2()))
+        truncated = False
+        info = {"is_success": terminated}
+        reward = float(self.task.compute_reward(observation["achieved_goal"], self.task.get_goal1(), self.task.get_goal2(), info))
+        return observation, reward, terminated, truncated, info
+
+    def close(self) -> None:
+        self.sim.close()
+
+    def render(self) -> Optional[np.ndarray]:
+        """Render.
+
+        If render mode is "rgb_array", return an RGB array of the scene. Else, do nothing and return None.
+
+        Returns:
+            RGB np.ndarray or None: An RGB array if mode is 'rgb_array', else None.
+        """
+        return self.sim.render(
+            width=self.render_width,
+            height=self.render_height,
+            target_position=self.render_target_position,
+            distance=self.render_distance,
+            yaw=self.render_yaw,
+            pitch=self.render_pitch,
+            roll=self.render_roll,
+        )

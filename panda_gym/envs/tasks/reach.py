@@ -14,6 +14,7 @@ class Reach(Task):
         reward_type="sparse",
         distance_threshold=0.05,
         goal_range=0.3,
+        goal_random=True,
     ) -> None:
         super().__init__(sim)
         self.reward_type = reward_type
@@ -21,6 +22,7 @@ class Reach(Task):
         self.get_ee_position = get_ee_position
         self.goal_range_low = np.array([-goal_range / 2, -goal_range / 2, 0])
         self.goal_range_high = np.array([goal_range / 2, goal_range / 2, goal_range])
+        self.goal_random=goal_random
         with self.sim.no_rendering():
             self._create_scene()
 
@@ -49,7 +51,10 @@ class Reach(Task):
 
     def _sample_goal(self) -> np.ndarray:
         """Randomize goal."""
-        goal = self.np_random.uniform(self.goal_range_low, self.goal_range_high)
+        if self.goal_random:
+            goal = self.np_random.uniform(self.goal_range_low, self.goal_range_high)
+        else:
+            goal = np.array([-0.10652074, 0.00213265, 0.19745056])
         return goal
 
     def is_success(self, achieved_goal: np.ndarray, desired_goal: np.ndarray) -> np.ndarray:
