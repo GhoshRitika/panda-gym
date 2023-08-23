@@ -167,7 +167,7 @@ class Task(ABC):
         self.goal = None
 
     @abstractmethod
-    def reset(self, goal_val: float) -> None:
+    def reset(self, goal_val: np.ndarray) -> None:
         """Reset the task: sample a new goal."""
 
     @abstractmethod
@@ -274,7 +274,7 @@ class RobotTaskEnv(gym.Env):
         }
 
     def reset(
-        self, seed: Optional[int] = None, options: Optional[dict] = None, goal_val: float=None,
+        self, seed: Optional[int] = None, options: Optional[dict] = None, goal_val: np.ndarray=None,
     ) -> Tuple[Dict[str, np.ndarray], Dict[str, Any]]:
         super().reset(seed=seed, options=options)
         self.task.np_random, seed = seeding.np_random(seed)
@@ -357,7 +357,7 @@ class TaskDouble(ABC):
         self.goal2 = None
 
     @abstractmethod
-    def reset(self, goal_val1: float, goal_val2: float) -> None:
+    def reset(self, goal_val1: np.ndarray, goal_val2: np.ndarray) -> None:
         """Reset the task: sample a new goal."""
 
     @abstractmethod
@@ -475,7 +475,7 @@ class RobotTaskDoubleEnv(gym.Env):
         }
 
     def reset(
-        self, seed: Optional[int] = None, options: Optional[dict] = None, goal_val1: float=None, goal_val2: float=None,
+        self, seed: Optional[int] = None, options: Optional[dict] = None, goal_val1: np.ndarray=None, goal_val2: np.ndarray=None,
     ) -> Tuple[Dict[str, np.ndarray], Dict[str, Any]]:
         super().reset(seed=seed, options=options)
         self.task.np_random, seed = seeding.np_random(seed)
