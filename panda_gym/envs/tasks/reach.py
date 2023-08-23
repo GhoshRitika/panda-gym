@@ -45,16 +45,18 @@ class Reach(Task):
         ee_position = np.array(self.get_ee_position())
         return ee_position
 
-    def reset(self) -> None:
-        self.goal = self._sample_goal()
+    def reset(self, goal_val=None) -> None:
+        self.goal = self._sample_goal(goal_val)
         self.sim.set_base_pose("target", self.goal, np.array([0.0, 0.0, 0.0, 1.0]))
 
-    def _sample_goal(self) -> np.ndarray:
+    def _sample_goal(self, goal_=None) -> np.ndarray:
         """Randomize goal."""
         if self.goal_random:
             goal = self.np_random.uniform(self.goal_range_low, self.goal_range_high)
         else:
-            goal = np.array([-0.10652074, 0.00213265, 0.19745056])
+            if goal_ is None:
+                goal_=np.array([-0.10652074, 0.00213265, 0.19745056])
+            goal = goal_
         return goal
 
     def is_success(self, achieved_goal: np.ndarray, desired_goal: np.ndarray) -> np.ndarray:

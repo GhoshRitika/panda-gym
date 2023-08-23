@@ -35,7 +35,7 @@ class ReachDouble(TaskDouble):
             mass=0.0,
             ghost=True,
             position=np.zeros(3),
-            rgba_color=np.array([0.1, 0.9, 0.1, 0.3]),
+            rgba_color=np.array([0.1, 0.9, 0.1, 0.9]),
         )
         self.sim.create_sphere(
             body_name="target2",
@@ -43,7 +43,7 @@ class ReachDouble(TaskDouble):
             mass=0.0,
             ghost=True,
             position=np.zeros(3),
-            rgba_color=np.array([0.9, 0.1, 0.1, 0.3]),
+            rgba_color=np.array([0.9, 0.1, 0.1, 0.9]),
         )
 
     def get_obs(self) -> np.ndarray:
@@ -53,19 +53,22 @@ class ReachDouble(TaskDouble):
         ee_position = np.array(self.get_ee_position())
         return ee_position
 
-    def reset(self) -> None:
-        self.goal1, self.goal2 = self._sample_goal()
+    def reset(self, goal_val1=None, goal_val2=None) -> None:
+        self.goal1, self.goal2 = self._sample_goal(goal_val1, goal_val2)
         self.sim.set_base_pose("target1", self.goal1, np.array([0.0, 0.0, 0.0, 1.0]))
         self.sim.set_base_pose("target2", self.goal2, np.array([0.0, 0.0, 0.0, 1.0]))
 
-    def _sample_goal(self) -> np.ndarray:
+    def _sample_goal(self, goal1_ = None, goal2_=None) -> np.ndarray:
         """Randomize goal."""
         if self.goal_random:
             goal1 = self.np_random.uniform(self.goal_range_low, self.goal_range_high)
             goal2 = self.np_random.uniform(self.goal_range_low, self.goal_range_high)
         else:
-            goal1 = np.array([-0.10652074, 0.00213265, 0.19745056])
-            goal2 = np.array([0.12452769, 0.04585412, 0.11220955])
+            if goal1_ is None and goal2_ is None:
+                goal1_=np.array([-0.10652074, 0.00213265, 0.19745056])
+                goal2_=np.array([0.12452769, 0.04585412, 0.11220955])
+            goal1 = goal1_
+            goal2 = goal2_
         return goal1, goal2
 
     def is_success(self, achieved_goal: np.ndarray, desired_goal1: np.ndarray, desired_goal2: np.ndarray) -> np.ndarray:
