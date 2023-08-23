@@ -55,7 +55,7 @@ class Reach(Task):
             goal = self.np_random.uniform(self.goal_range_low, self.goal_range_high)
         else:
             if goal_ is None:
-                goal_=np.array([-0.10652074, 0.00213265, 0.19745056])
+                goal_= np.array([-0.10652074, 0.00213265, 0.19745056])
             goal = goal_
         return goal
 

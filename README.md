@@ -1,5 +1,8 @@
 # panda-gym
 
+This fork modifies FrankaReach environment to allow a goal to be specified instead of always ebing random.
+It aslo creates a new environment FrankaReachDouble which has 2 goal points, where the dense reward depends on the distance from each goal, the weight is greater for the green goal.
+
 Set of robotic environments based on PyBullet physics engine and gymnasium.
 
 [![PyPI version](https://img.shields.io/pypi/v/panda-gym.svg?logo=pypi&logoColor=FFE873)](https://pypi.org/project/panda-gym/)
